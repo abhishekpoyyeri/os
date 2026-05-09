@@ -37,11 +37,8 @@ void pmm_init(uint32_t mem_size_kb) {
     }
     used_pages = total_pages;
 
-    /* Free usable pages starting from 1MB (0x100000) onwards.
-     * Pages below 1MB are reserved for BIOS, VGA, kernel, etc. */
-    uint32_t start_page = 0x100000 / PAGE_SIZE;  /* Page 256 = 1MB */
-    
-    /* We also need to skip the kernel. Assume kernel ends at 2MB for safety. */
+    /* Free usable pages after the reserved low memory and kernel area.
+     * Assume the kernel ends at 2MB for safety. */
     uint32_t kernel_end_page = 0x200000 / PAGE_SIZE;  /* Page 512 = 2MB */
 
     for (uint32_t i = kernel_end_page; i < total_pages; i++) {

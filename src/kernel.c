@@ -141,13 +141,13 @@ void itoa(int n, char s[]) {
     }
 }
 
-/* External functions from apps */
-extern void read_rtc(uint8_t *second, uint8_t *minute, uint8_t *hour, uint8_t *day, uint8_t *month, uint32_t *year);
+/* External RTC functions */
+extern void rtc_get_time(uint8_t *second, uint8_t *minute, uint8_t *hour, uint8_t *day, uint8_t *month, uint32_t *year);
 
 void display_time() {
     uint8_t s, m, h, d, mo;
     uint32_t y;
-    read_rtc(&s, &m, &h, &d, &mo, &y);
+    rtc_get_time(&s, &m, &h, &d, &mo, &y);
 
     char buf[16];
     terminal_writestring("Current Time: ");
@@ -182,6 +182,15 @@ extern void desktop_init(void);
 extern void desktop_update(void);
 extern uint8_t desktop_is_running(void);
 
+/* New core services */
+extern void klog_init(void);
+extern void ata_init(void);
+extern void myfs_init(void);
+extern void vfs_init(void);
+extern void settings_init(void);
+extern void settings_load(void);
+extern void rtc_init(void);
+
 /* Global flag: 0 = text shell, 1 = GUI mode */
 volatile uint8_t gui_mode = 0;
 
@@ -196,6 +205,15 @@ void kernel_main(void) {
     /* Initialize memory management (assume 32 MB RAM) */
     pmm_init(32 * 1024);  /* 32 MB in KB */
     kheap_init();
+
+    /* Initialize storage and persistence */
+    klog_init();
+    ata_init();
+    myfs_init();
+    vfs_init();
+    settings_init();
+    settings_load();
+    rtc_init();
 
     terminal_writestring("MyOS v0.4\n");
     terminal_writestring("----------\n");
