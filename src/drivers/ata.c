@@ -59,9 +59,11 @@ static int ata_wait_drq(void) {
 
 void ata_init(void) {
     klog_info("ATA PIO driver initialized on primary bus (0x1F0)");
+    klog_info_u32("ATA initial status", inb(ATA_PRIMARY_IO + ATA_REG_STATUS));
 }
 
 int ata_read_sector(uint32_t lba, uint8_t* buffer) {
+    klog_info_u32("ATA read LBA", lba);
     if (ata_wait_bsy() != KERR_OK) {
         klog_error("ATA read: timeout waiting for BSY to clear");
         return KERR_DISK_TIMEOUT;
@@ -79,6 +81,8 @@ int ata_read_sector(uint32_t lba, uint8_t* buffer) {
         return KERR_DISK_TIMEOUT;
     }
     if (ata_wait_drq() != KERR_OK) {
+        klog_error_u32("ATA read status", inb(ATA_PRIMARY_IO + ATA_REG_STATUS));
+        klog_error_u32("ATA read error register", inb(ATA_PRIMARY_IO + ATA_REG_ERROR));
         klog_error("ATA read: IO error or DRQ not set");
         return KERR_IO_ERROR;
     }
@@ -90,6 +94,7 @@ int ata_read_sector(uint32_t lba, uint8_t* buffer) {
 }
 
 int ata_write_sector(uint32_t lba, const uint8_t* buffer) {
+    klog_info_u32("ATA write LBA", lba);
     if (ata_wait_bsy() != KERR_OK) {
         klog_error("ATA write: timeout waiting for BSY to clear");
         return KERR_DISK_TIMEOUT;
@@ -107,16 +112,27 @@ int ata_write_sector(uint32_t lba, const uint8_t* buffer) {
         return KERR_DISK_TIMEOUT;
     }
     if (ata_wait_drq() != KERR_OK) {
+        klog_error_u32("ATA write status", inb(ATA_PRIMARY_IO + ATA_REG_STATUS));
+        klog_error_u32("ATA write error register", inb(ATA_PRIMARY_IO + ATA_REG_ERROR));
         klog_error("ATA write: IO error or DRQ not set");
         return KERR_IO_ERROR;
     }
 
     outsw(ATA_PRIMARY_IO + ATA_REG_DATA, buffer, 256);
 
+    if (ata_wait_bsy() != KERR_OK) {
+        klog_error("ATA write: timeout after sending data");
+        return KERR_DISK_TIMEOUT;
+    }
+
     outb(ATA_PRIMARY_IO + ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
     if (ata_wait_bsy() != KERR_OK) {
         klog_error("ATA write: cache flush timeout");
         return KERR_DISK_TIMEOUT;
+    }
+    if (inb(ATA_PRIMARY_IO + ATA_REG_STATUS) & (ATA_SR_ERR | ATA_SR_DF)) {
+        klog_error_u32("ATA write flush status", inb(ATA_PRIMARY_IO + ATA_REG_STATUS));
+        return KERR_IO_ERROR;
     }
 
     return KERR_OK;

@@ -19,7 +19,10 @@ void vfs_init(void) {
 
 int vfs_open(const char* name) {
     uint32_t file_idx;
-    if (myfs_find(name, &file_idx) != KERR_OK) return KERR_NOT_FOUND;
+    if (myfs_find(name, &file_idx) != KERR_OK) {
+        klog_warn("VFS open failed: not found");
+        return KERR_NOT_FOUND;
+    }
     
     int fd = -1;
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
@@ -34,6 +37,8 @@ int vfs_open(const char* name) {
     open_files[fd].position = 0;
     open_files[fd].locked = 0;
     open_files[fd].used = 1;
+    klog_info_u32("VFS open fd", fd);
+    klog_info_u32("VFS open file index", file_idx);
     return fd;
 }
 
@@ -58,9 +63,23 @@ int vfs_write(int fd, const uint8_t* buffer, uint32_t length) {
     if (fd < 0 || fd >= MAX_OPEN_FILES || !open_files[fd].used) return KERR_INVALID_ARGUMENT;
     VFSFile* vf = &open_files[fd];
     
+    klog_info_u32("VFS write fd", fd);
+    klog_info_u32("VFS write length", length);
+    klog_info_u32("VFS write position", vf->position);
     int ret = myfs_write(vf->file_index, vf->position, buffer, length);
     if (ret == KERR_OK) {
         vf->position += length;
+    }
+    return ret;
+}
+
+int vfs_truncate(int fd, uint32_t size) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES || !open_files[fd].used) return KERR_INVALID_ARGUMENT;
+    klog_info_u32("VFS truncate fd", fd);
+    klog_info_u32("VFS truncate size", size);
+    int ret = myfs_truncate(open_files[fd].file_index, size);
+    if (ret == KERR_OK && open_files[fd].position > size) {
+        open_files[fd].position = size;
     }
     return ret;
 }
@@ -84,6 +103,7 @@ int vfs_exists(const char* name) {
 }
 
 int vfs_create(const char* name, uint8_t type) {
+    klog_info("VFS create");
     return myfs_create(name, type);
 }
 

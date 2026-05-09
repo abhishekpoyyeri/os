@@ -49,6 +49,7 @@ void settings_save(void) {
     int fd = vfs_open("settings.cfg");
     if (fd >= 0) {
         vfs_write(fd, (const uint8_t*)&current_settings, sizeof(SystemSettings));
+        vfs_truncate(fd, sizeof(SystemSettings));
         vfs_close(fd);
         klog_info("Settings saved.");
     } else {

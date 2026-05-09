@@ -39,6 +39,7 @@ int myfs_create(const char* name, uint8_t type);
 int myfs_delete(const char* name);
 int myfs_read(uint32_t file_index, uint32_t offset, uint8_t* buffer, uint32_t length);
 int myfs_write(uint32_t file_index, uint32_t offset, const uint8_t* buffer, uint32_t length);
+int myfs_truncate(uint32_t file_index, uint32_t size);
 int myfs_find(const char* name, uint32_t* file_index);
 FileEntry* myfs_get_entry(uint32_t file_index);
 

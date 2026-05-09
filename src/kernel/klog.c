@@ -27,6 +27,45 @@ static void klog_write_string(const char* str) {
     }
 }
 
+static void klog_write_u32(unsigned int value) {
+    char buf[11];
+    int i = 0;
+
+    if (value == 0) {
+        klog_write_char('0');
+        return;
+    }
+
+    while (value > 0 && i < 10) {
+        buf[i++] = (char)('0' + (value % 10));
+        value /= 10;
+    }
+
+    while (i > 0) {
+        klog_write_char(buf[--i]);
+    }
+}
+
+static void klog_write_hex(unsigned int value) {
+    static const char hex[] = "0123456789ABCDEF";
+    klog_write_string("0x");
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        klog_write_char(hex[(value >> shift) & 0xF]);
+    }
+}
+
+static void klog_write_labeled_value(const char* level, const char* label, unsigned int value, uint8_t hex) {
+    klog_write_string(level);
+    klog_write_string(label);
+    klog_write_string("=");
+    if (hex) {
+        klog_write_hex(value);
+    } else {
+        klog_write_u32(value);
+    }
+    klog_write_string("\r\n");
+}
+
 void klog_info(const char* msg) {
     klog_write_string("[INFO] ");
     klog_write_string(msg);
@@ -43,4 +82,20 @@ void klog_error(const char* msg) {
     klog_write_string("[ERROR] ");
     klog_write_string(msg);
     klog_write_string("\r\n");
+}
+
+void klog_info_u32(const char* label, unsigned int value) {
+    klog_write_labeled_value("[INFO] ", label, value, 0);
+}
+
+void klog_info_hex(const char* label, unsigned int value) {
+    klog_write_labeled_value("[INFO] ", label, value, 1);
+}
+
+void klog_warn_u32(const char* label, unsigned int value) {
+    klog_write_labeled_value("[WARN] ", label, value, 0);
+}
+
+void klog_error_u32(const char* label, unsigned int value) {
+    klog_write_labeled_value("[ERROR] ", label, value, 0);
 }

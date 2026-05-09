@@ -4,8 +4,11 @@
 
 static volatile uint32_t tick_count = 0;
 
+extern void rtc_tick(void);
+
 void timer_handler(void) {
     tick_count++;
+    rtc_tick();
 }
 
 uint32_t timer_get_ticks(void) {

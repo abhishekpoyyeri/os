@@ -33,8 +33,8 @@ extern uint32_t timer_get_ticks(void);
 extern void timer_init(uint32_t frequency);
 
 /* External clock functions */
-extern void read_rtc(uint8_t *second, uint8_t *minute, uint8_t *hour,
-                     uint8_t *day, uint8_t *month, uint32_t *year);
+extern void rtc_get_time(uint8_t *second, uint8_t *minute, uint8_t *hour,
+                         uint8_t *day, uint8_t *month, uint32_t *year);
 
 /* External string/number functions */
 extern size_t strlen(const char* str);
@@ -85,9 +85,6 @@ typedef struct {
     int x, y;
     uint8_t buttons;
 } gui_event_t;
-static gui_event_t event_queue[MAX_EVENTS];
-static int event_head = 0;
-static int event_tail = 0;
 
 static uint8_t gui_running = 0;
 
@@ -194,7 +191,7 @@ static void make_time_string(char* out, uint8_t include_seconds) {
     uint8_t s, m, h, d, mo;
     uint32_t y;
     int idx = 0;
-    read_rtc(&s, &m, &h, &d, &mo, &y);
+    rtc_get_time(&s, &m, &h, &d, &mo, &y);
     append_two_digit(out, &idx, h, 16);
     append_text(out, &idx, ":", 16);
     append_two_digit(out, &idx, m, 16);
@@ -209,7 +206,7 @@ static void make_date_string(char* out) {
     uint8_t s, m, h, d, mo;
     uint32_t y;
     int idx = 0;
-    read_rtc(&s, &m, &h, &d, &mo, &y);
+    rtc_get_time(&s, &m, &h, &d, &mo, &y);
     append_two_digit(out, &idx, d, 16);
     append_text(out, &idx, "/", 16);
     append_two_digit(out, &idx, mo, 16);
@@ -252,47 +249,6 @@ static const char* app_short_name(uint8_t app_id) {
 
 /* ===== App Renderers ===== */
 
-static void render_clock_app(window_t* win) {
-    uint8_t s, m, h, d, mo;
-    uint32_t y;
-    read_rtc(&s, &m, &h, &d, &mo, &y);
-
-    char time_str[16];
-    char date_str[16];
-    int idx = 0;
-    int cx = win->x + 8;
-    int cy = win->y + TITLEBAR_HEIGHT + 7;
-
-    font_draw_string(cx, cy, "Live clock", 24);
-    draw_status_pill(win->x + win->w - 48, cy - 2, 40, "RTC", 34);
-    cy += 14;
-
-    idx = 0;
-    if (h < 10) time_str[idx++] = '0';
-    append_number(time_str, &idx, h, 16);
-    time_str[idx++] = ':';
-    if (m < 10) time_str[idx++] = '0';
-    append_number(time_str, &idx, m, 16);
-    time_str[idx++] = ':';
-    if (s < 10) time_str[idx++] = '0';
-    append_number(time_str, &idx, s, 16);
-    time_str[idx] = '\0';
-
-    draw_soft_panel(cx, cy, win->w - 16, 26, 16);
-    font_draw_string_shadow(cx + 18, cy + 9, time_str, 4, 25);
-    cy += 34;
-
-    idx = 0;
-    append_two_digit(date_str, &idx, d, 16);
-    append_text(date_str, &idx, "/", 16);
-    append_two_digit(date_str, &idx, mo, 16);
-    append_text(date_str, &idx, "/", 16);
-    append_number(date_str, &idx, (int)y, 16);
-    date_str[idx] = '\0';
-
-    font_draw_string(cx + 2, cy, "Date", 41);
-    font_draw_string(cx + 36, cy, date_str, 4);
-}
 
 static void render_calc_app(window_t* win) {
     int cx = win->x + 6;
@@ -447,51 +403,6 @@ static void render_sysmon_app(window_t* win) {
 
 /* ===== Notepad App ===== */
 
-static char notepad_buf[256];
-static int notepad_len = 0;
-static uint8_t notepad_active = 0;
-
-static void render_notepad_app(window_t* win) {
-    int cx = win->x + 6;
-    int cy = win->y + TITLEBAR_HEIGHT + 4;
-
-    vga_fill_rounded_rect(cx, cy, win->w - 12, 14, 38);
-    font_draw_string(cx + 6, cy + 4, "Quick note", 24);
-    vga_fill_rounded_rect(win->x + win->w - 42, cy + 2, 34, 10, 22);
-    font_draw_string(win->x + win->w - 36, cy + 4, "Clear", 4);
-    cy += 18;
-
-    vga_fill_rect(cx, cy, win->w - 12, win->h - TITLEBAR_HEIGHT - 22, 16);
-    vga_draw_rect(cx, cy, win->w - 12, win->h - TITLEBAR_HEIGHT - 22, 40);
-
-    if (notepad_len == 0) {
-        font_draw_string(cx + 5, cy + 5, "Type here...", 41);
-    }
-
-    int tx = cx + 4;
-    int ty = cy + 4;
-    int max_x = cx + win->w - 16;
-    for (int i = 0; i < notepad_len; i++) {
-        if (notepad_buf[i] == '\n' || tx + 7 > max_x) {
-            tx = cx + 4;
-            ty += 10;
-            if (notepad_buf[i] == '\n') continue;
-        }
-        if (ty + 10 > win->y + win->h - 8) break;
-        font_draw_char(tx, ty, notepad_buf[i], 4);
-        tx += 7;
-    }
-
-    if ((timer_get_ticks() / 50) % 2 == 0) {
-        vga_fill_rect(tx, ty, 1, 8, 4);
-    }
-
-    int sy = win->y + win->h - 10;
-    char lbuf[8];
-    itoa(notepad_len, lbuf);
-    font_draw_string(cx + 4, sy, lbuf, 24);
-    font_draw_string(cx + 4 + font_string_width(lbuf), sy, " chars", 24);
-}
 
 /* ===== Tasks App ===== */
 
@@ -713,7 +624,7 @@ static void draw_menu(void) {
     font_draw_string(mx + 88, my2 + 8, "MyOS", 41);
 
     const char* items[] = {"Clock", "Calculator", "System", "Notes", "Tasks", "Help", "About"};
-    uint8_t app_ids[] = {APP_CLOCK, APP_CALC, APP_SYSMON, APP_NOTES, APP_TASKS, APP_HELP, APP_ABOUT};
+    uint8_t app_ids[] = {APP_CLOCK, APP_CALC, APP_SYSMON, APP_TEXTEDIT, APP_TASKS, APP_HELP, APP_ABOUT};
     int32_t mmx = mouse_get_x(), mmy = mouse_get_y();
 
     for (int i = 0; i < 7; i++) {
@@ -818,6 +729,12 @@ void desktop_key_input(char c) {
         return;
     }
 
+    /* Forward keys to clock app if it's focused */
+    if (focused_window >= 0 && windows[focused_window].app_id == APP_CLOCK && windows[focused_window].is_open) {
+        clock_app_key(c);
+        return;
+    }
+
     if (c == 'c') open_app(APP_CALC);
     else if (c == 't') open_app(APP_CLOCK);
     else if (c == 'n') open_app(APP_TEXTEDIT);
@@ -873,7 +790,7 @@ static void handle_input(void) {
         int mmx2 = 8;
         int mh2 = 118;
         int mmy2 = sh - TASKBAR_HEIGHT - mh2 - 4;
-        uint8_t app_ids[] = {APP_CLOCK, APP_CALC, APP_SYSMON, APP_NOTES, APP_TASKS, APP_HELP, APP_ABOUT};
+        uint8_t app_ids[] = {APP_CLOCK, APP_CALC, APP_SYSMON, APP_TEXTEDIT, APP_TASKS, APP_HELP, APP_ABOUT};
         if (mx >= mmx2 && mx < mmx2 + mw2 && my >= mmy2 && my < mmy2 + mh2) {
             for (int i = 0; i < 7; i++) {
                 int col = i % 2;
@@ -914,7 +831,6 @@ static void handle_input(void) {
             int cby = win->y + 3;
             if (mx >= cbx && mx < cbx + 11 && my >= cby && my < cby + 10) {
                 win->is_open = 0;
-                if (win->app_id == APP_NOTES) notepad_active = 0;
                 if (focused_window == i) {
                     focused_window = -1;
                     for (int j = window_count - 1; j >= 0; j--) {
@@ -937,15 +853,6 @@ static void handle_input(void) {
                 return;
             }
 
-            if (win->app_id == APP_NOTES) {
-                int clear_x = win->x + win->w - 42;
-                int clear_y = win->y + TITLEBAR_HEIGHT + 6;
-                if (mx >= clear_x && mx < clear_x + 34 &&
-                    my >= clear_y && my < clear_y + 10) {
-                    notepad_len = 0;
-                    return;
-                }
-            }
 
             if (win->app_id == APP_TASKS) {
                 int tx = win->x + 8;

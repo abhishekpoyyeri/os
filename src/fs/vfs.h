@@ -19,6 +19,7 @@ int vfs_open(const char* name);
 int vfs_close(int fd);
 int vfs_read(int fd, uint8_t* buffer, uint32_t length);
 int vfs_write(int fd, const uint8_t* buffer, uint32_t length);
+int vfs_truncate(int fd, uint32_t size);
 int vfs_delete(const char* name);
 int vfs_exists(const char* name);
 int vfs_create(const char* name, uint8_t type);

@@ -20,5 +20,9 @@ void files_app_render(window_t* win);
 void textedit_app_render(window_t* win);
 
 void textedit_app_key(char c);
+void textedit_load_external(const char* buf, int len);
+void clock_app_key(char c);
+
+
 
 #endif

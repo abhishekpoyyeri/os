@@ -5,8 +5,9 @@ CC = gcc
 LD = ld
 
 ASFLAGS = -felf32
-CFLAGS = -m32 -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+CFLAGS = -m32 -std=gnu99 -ffreestanding -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -O2 -Wall -Wextra
 LDFLAGS = -m elf_i386 -T linker.ld
+DISK = myos.img
 
 SRCDIR = src
 OBJDIR = obj
@@ -159,11 +160,14 @@ myos.bin: $(OBJS)
 clean:
 	rm -rf $(OBJDIR) myos.bin
 
-run: myos.bin
-	qemu-system-i386 -kernel myos.bin
+$(DISK):
+	dd if=/dev/zero of=$@ bs=1M count=16
 
-run-gui: myos.bin
-	qemu-system-i386 -kernel myos.bin -m 32M
+run: myos.bin $(DISK)
+	qemu-system-i386 -kernel myos.bin -drive file=$(DISK),format=raw,if=ide
+
+run-gui: myos.bin $(DISK)
+	qemu-system-i386 -kernel myos.bin -m 32M -drive file=$(DISK),format=raw,if=ide
 
 .PHONY: all clean run run-gui
 

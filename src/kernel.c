@@ -141,13 +141,13 @@ void itoa(int n, char s[]) {
     }
 }
 
-/* External functions from apps */
-extern void read_rtc(uint8_t *second, uint8_t *minute, uint8_t *hour, uint8_t *day, uint8_t *month, uint32_t *year);
+/* External RTC functions */
+extern void rtc_get_time(uint8_t *second, uint8_t *minute, uint8_t *hour, uint8_t *day, uint8_t *month, uint32_t *year);
 
 void display_time() {
     uint8_t s, m, h, d, mo;
     uint32_t y;
-    read_rtc(&s, &m, &h, &d, &mo, &y);
+    rtc_get_time(&s, &m, &h, &d, &mo, &y);
 
     char buf[16];
     terminal_writestring("Current Time: ");
