@@ -1,72 +1,96 @@
 /* src/apps/clock.c */
-#include "../drivers/io.h"
-#include <stdint.h>
+#include "apps.h"
+#include "../drivers/rtc.h"
+#include "../settings.h"
 
-#define CMOS_ADDRESS 0x70
-#define CMOS_DATA    0x71
+extern void vga_fill_rect(int x, int y, int w, int h, uint8_t color);
+extern void vga_fill_rounded_rect(int x, int y, int w, int h, uint8_t color);
+extern void vga_draw_hline(int x, int y, int len, uint8_t color);
+extern void vga_draw_rect(int x, int y, int w, int h, uint8_t color);
+extern void font_draw_string(int x, int y, const char* str, uint8_t color);
+extern void font_draw_string_shadow(int x, int y, const char* str, uint8_t fg, uint8_t shadow);
+extern void font_draw_char(int x, int y, char c, uint8_t color);
+extern int font_string_width(const char* str);
+extern void itoa(int n, char s[]);
+extern size_t strlen(const char* str);
+extern int32_t mouse_get_x(void);
+extern int32_t mouse_get_y(void);
+extern uint8_t mouse_get_buttons(void);
 
-int get_update_in_progress_flag() {
-      outb(CMOS_ADDRESS, 0x0A);
-      return (inb(CMOS_DATA) & 0x80);
+static void append_text(char* out, int* idx, const char* text, int max) {
+    for (int i = 0; text[i] && *idx < max - 1; i++) {
+        out[(*idx)++] = text[i];
+    }
+    out[*idx] = '\0';
 }
 
-uint8_t get_rtc_register(int reg) {
-      outb(CMOS_ADDRESS, reg);
-      return inb(CMOS_DATA);
+static void append_number(char* out, int* idx, int value, int max) {
+    char buf[16];
+    itoa(value, buf);
+    append_text(out, idx, buf, max);
 }
 
-void read_rtc(uint8_t *second, uint8_t *minute, uint8_t *hour, uint8_t *day, uint8_t *month, uint32_t *year) {
-      uint8_t last_second;
-      uint8_t last_minute;
-      uint8_t last_hour;
-      uint8_t last_day;
-      uint8_t last_month;
-      uint8_t last_year;
-      uint8_t registerB;
+static void append_two_digit(char* out, int* idx, uint8_t value, int max) {
+    if (value < 10 && *idx < max - 1) out[(*idx)++] = '0';
+    append_number(out, idx, value, max);
+}
 
-      while (get_update_in_progress_flag());
-      *second = get_rtc_register(0x00);
-      *minute = get_rtc_register(0x02);
-      *hour = get_rtc_register(0x04);
-      *day = get_rtc_register(0x07);
-      *month = get_rtc_register(0x08);
-      *year = get_rtc_register(0x09);
+static void draw_soft_panel(int x, int y, int w, int h, uint8_t color) {
+    vga_fill_rect(x + 2, y + 2, w, h, 25);
+    vga_fill_rounded_rect(x, y, w, h, color);
+    vga_draw_hline(x + 3, y + 1, w - 6, 39);
+    vga_draw_rect(x, y, w, h, 40);
+}
 
-      do {
-            last_second = *second;
-            last_minute = *minute;
-            last_hour = *hour;
-            last_day = *day;
-            last_month = *month;
-            last_year = (uint8_t)*year;
+static void draw_status_pill(int x, int y, int w, const char* text, uint8_t accent) {
+    vga_fill_rounded_rect(x, y, w, 13, 38);
+    vga_draw_rect(x + 4, y + 3, 7, 7, accent); /* Simplified for now */
+    font_draw_string(x + 15, y + 3, text, 4);
+}
 
-            while (get_update_in_progress_flag());
-            *second = get_rtc_register(0x00);
-            *minute = get_rtc_register(0x02);
-            *hour = get_rtc_register(0x04);
-            *day = get_rtc_register(0x07);
-            *month = get_rtc_register(0x08);
-            *year = get_rtc_register(0x09);
-      } while( (last_second != *second) || (last_minute != *minute) || (last_hour != *hour) ||
-               (last_day != *day) || (last_month != *month) || (last_year != (uint8_t)*year) );
+void clock_app_render(window_t* win) {
+    uint8_t s, m, h, d, mo;
+    uint32_t y;
+    rtc_get_time(&s, &m, &h, &d, &mo, &y);
 
-      registerB = get_rtc_register(0x0B);
+    char time_str[16];
+    char date_str[16];
+    int idx = 0;
+    int cx = win->x + 8;
+    int cy = win->y + 20 + 7;
 
-      // Convert BCD to binary if necessary
-      if (!(registerB & 0x04)) {
-            *second = (*second & 0x0F) + ((*second / 16) * 10);
-            *minute = (*minute & 0x0F) + ((*minute / 16) * 10);
-            *hour = ( (*hour & 0x0F) + (((*hour & 0x70) / 16) * 10) ) | (*hour & 0x80);
-            *day = (*day & 0x0F) + ((*day / 16) * 10);
-            *month = (*month & 0x0F) + ((*month / 16) * 10);
-            *year = (*year & 0x0F) + ((*year / 16) * 10);
-      }
+    font_draw_string(cx, cy, "Live clock", 24);
+    draw_status_pill(win->x + win->w - 48, cy - 2, 40, "RTC", 34);
+    cy += 14;
 
-      // Convert 12 hour clock to 24 hour clock if necessary
-      if (!(registerB & 0x02) && (*hour & 0x80)) {
-            *hour = ((*hour & 0x7F) + 12) % 24;
-      }
+    SystemSettings* settings = settings_get();
 
-      // Calculate the full (4-digit) year
-      *year += 2000;
+    idx = 0;
+    if (h < 10) time_str[idx++] = '0';
+    append_number(time_str, &idx, h, 16);
+    time_str[idx++] = ':';
+    if (m < 10) time_str[idx++] = '0';
+    append_number(time_str, &idx, m, 16);
+    
+    if (settings->show_seconds) {
+        time_str[idx++] = ':';
+        if (s < 10) time_str[idx++] = '0';
+        append_number(time_str, &idx, s, 16);
+    }
+    time_str[idx] = '\0';
+
+    draw_soft_panel(cx, cy, win->w - 16, 26, 16);
+    font_draw_string_shadow(cx + 18, cy + 9, time_str, 4, 25);
+    cy += 34;
+
+    idx = 0;
+    append_two_digit(date_str, &idx, d, 16);
+    append_text(date_str, &idx, "/", 16);
+    append_two_digit(date_str, &idx, mo, 16);
+    append_text(date_str, &idx, "/", 16);
+    append_number(date_str, &idx, (int)y, 16);
+    date_str[idx] = '\0';
+
+    font_draw_string(cx + 2, cy, "Date", 41);
+    font_draw_string(cx + 36, cy, date_str, 4);
 }

@@ -42,27 +42,22 @@ extern void itoa(int n, char s[]);
 
 /* ===== Window System ===== */
 
-#define MAX_WINDOWS 8
+#include "../apps/apps.h"
+
+#define MAX_WINDOWS 16
 #define TITLEBAR_HEIGHT 16
 #define TASKBAR_HEIGHT  24
-#define DESKTOP_ICON_COUNT 6
+#define DESKTOP_ICON_COUNT 8
 
-#define APP_CLOCK   0
-#define APP_CALC    1
-#define APP_ABOUT   2
-#define APP_SYSMON  3
-#define APP_NOTES   4
-#define APP_TASKS   5
-#define APP_HELP    6
-
-typedef struct {
-    int x, y, w, h;
-    const char* title;
-    uint8_t is_open;
-    uint8_t is_focused;
-    uint8_t bg_color;
-    uint8_t app_id;
-} window_t;
+#define APP_CLOCK    0
+#define APP_CALC     1
+#define APP_ABOUT    2
+#define APP_SYSMON   3
+#define APP_TEXTEDIT 4
+#define APP_TASKS    5
+#define APP_HELP     6
+#define APP_FILES    7
+#define APP_SETTINGS 8
 
 typedef struct {
     int x, y;
@@ -72,9 +67,28 @@ typedef struct {
     uint8_t color;
 } desktop_icon_t;
 
-static window_t windows[MAX_WINDOWS];
-static int window_count = 0;
-static int focused_window = -1;
+typedef struct {
+    window_t windows[MAX_WINDOWS];
+    int window_count;
+    int focused_window;
+} WindowManager;
+
+static WindowManager wm = { .window_count = 0, .focused_window = -1 };
+#define windows wm.windows
+#define window_count wm.window_count
+#define focused_window wm.focused_window
+
+#define MAX_EVENTS 128
+typedef struct {
+    uint8_t type;
+    char key;
+    int x, y;
+    uint8_t buttons;
+} gui_event_t;
+static gui_event_t event_queue[MAX_EVENTS];
+static int event_head = 0;
+static int event_tail = 0;
+
 static uint8_t gui_running = 0;
 
 /* Click debounce: tracks last button state per frame */
@@ -87,11 +101,13 @@ static int drag_offset_y = 0;
 
 static const desktop_icon_t desktop_icons[DESKTOP_ICON_COUNT] = {
     {14,  28, 'T', "Time",  APP_CLOCK,  34},
-    {14,  68, 'N', "Notes", APP_NOTES,  35},
+    {14,  68, 'N', "Notes", APP_TEXTEDIT,  35},
     {14, 108, 'M', "Stats", APP_SYSMON, 36},
     {76,  28, '+', "Calc",  APP_CALC,   37},
     {76,  68, '#', "Tasks", APP_TASKS,  11},
-    {76, 108, '?', "Help",  APP_HELP,   30}
+    {76, 108, '?', "Help",  APP_HELP,   30},
+    {138, 28, 'F', "Files", APP_FILES,  42},
+    {138, 68, 'S', "Setups",APP_SETTINGS, 43}
 };
 
 static uint8_t task_done[4] = {0, 0, 0, 0};
@@ -226,9 +242,11 @@ static const char* app_short_name(uint8_t app_id) {
     if (app_id == APP_CLOCK) return "Time";
     if (app_id == APP_CALC) return "Calc";
     if (app_id == APP_SYSMON) return "Stat";
-    if (app_id == APP_NOTES) return "Note";
+    if (app_id == APP_TEXTEDIT) return "Note";
     if (app_id == APP_TASKS) return "Task";
     if (app_id == APP_HELP) return "Help";
+    if (app_id == APP_FILES) return "File";
+    if (app_id == APP_SETTINGS) return "Conf";
     return "Info";
 }
 
@@ -586,9 +604,10 @@ static int open_app(uint8_t app_id) {
     if (app_id == APP_CLOCK) return create_window(178, 18, 126, 92, "Clock", APP_CLOCK);
     if (app_id == APP_CALC) return create_window(182, 36, 122, 122, "Calc", APP_CALC);
     if (app_id == APP_SYSMON) return create_window(138, 20, 164, 126, "System", APP_SYSMON);
-    if (app_id == APP_NOTES) return create_window(132, 26, 170, 132, "Notes", APP_NOTES);
+    if (app_id == APP_TEXTEDIT) return create_window(132, 26, 170, 132, "Notes", APP_TEXTEDIT);
     if (app_id == APP_TASKS) return create_window(148, 22, 154, 112, "Tasks", APP_TASKS);
     if (app_id == APP_HELP) return create_window(138, 22, 164, 120, "Help", APP_HELP);
+    if (app_id == APP_FILES) return create_window(120, 30, 180, 140, "Files", APP_FILES);
     return create_window(164, 28, 140, 104, "About", APP_ABOUT);
 }
 
@@ -618,13 +637,14 @@ static void draw_window(window_t* win) {
     vga_draw_rect(win->x, win->y, win->w, win->h, win->is_focused ? 40 : 6);
 
     switch (win->app_id) {
-        case APP_CLOCK:  render_clock_app(win); break;
+        case APP_CLOCK:  clock_app_render(win); break;
         case APP_CALC:   render_calc_app(win); break;
         case APP_ABOUT:  render_about_app(win); break;
         case APP_SYSMON: render_sysmon_app(win); break;
-        case APP_NOTES:  render_notepad_app(win); break;
+        case APP_TEXTEDIT: textedit_app_render(win); break;
         case APP_TASKS:  render_tasks_app(win); break;
         case APP_HELP:   render_help_app(win); break;
+        case APP_FILES:  files_app_render(win); break;
     }
 }
 
@@ -792,21 +812,18 @@ void desktop_key_input(char c) {
         return;
     }
 
-    /* Forward keys to notepad if it's focused */
-    if (focused_window >= 0 && windows[focused_window].app_id == APP_NOTES && windows[focused_window].is_open) {
-        if (c == '\b') {
-            if (notepad_len > 0) notepad_len--;
-        } else if (notepad_len < 255) {
-            notepad_buf[notepad_len++] = c;
-        }
+    /* Forward keys to text editor if it's focused */
+    if (focused_window >= 0 && windows[focused_window].app_id == APP_TEXTEDIT && windows[focused_window].is_open) {
+        textedit_app_key(c);
         return;
     }
 
     if (c == 'c') open_app(APP_CALC);
     else if (c == 't') open_app(APP_CLOCK);
-    else if (c == 'n') open_app(APP_NOTES);
+    else if (c == 'n') open_app(APP_TEXTEDIT);
     else if (c == 'm') open_app(APP_SYSMON);
     else if (c == 'h') open_app(APP_HELP);
+    else if (c == 'f') open_app(APP_FILES);
 }
 
 static void handle_input(void) {

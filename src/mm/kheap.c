@@ -69,7 +69,9 @@ void* kmalloc(size_t sz) {
             }
             
             curr->is_free = 0;
-            return (void*)((uint8_t*)curr + sizeof(block_header_t));
+            void* ret = (void*)((uint8_t*)curr + sizeof(block_header_t));
+            memset_heap(ret, 0xAA, sz);
+            return ret;
         }
         curr = curr->next;
     }
@@ -92,6 +94,7 @@ void kfree(void* ptr) {
     if (!ptr) return;
     
     block_header_t* header = (block_header_t*)((uint8_t*)ptr - sizeof(block_header_t));
+    memset_heap(ptr, 0xDD, header->size);
     header->is_free = 1;
     
     /* Coalesce adjacent free blocks */

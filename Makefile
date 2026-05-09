@@ -16,6 +16,8 @@ OBJS = $(OBJDIR)/boot.o \
        $(OBJDIR)/shell.o \
        $(OBJDIR)/clock.o \
        $(OBJDIR)/calc.o \
+       $(OBJDIR)/files_app.o \
+       $(OBJDIR)/textedit_app.o \
        $(OBJDIR)/gdt_idt.o \
        $(OBJDIR)/descriptor_tables.o \
        $(OBJDIR)/interrupt.o \
@@ -23,8 +25,15 @@ OBJS = $(OBJDIR)/boot.o \
        $(OBJDIR)/timer.o \
        $(OBJDIR)/mouse.o \
        $(OBJDIR)/vga.o \
+       $(OBJDIR)/ata.o \
+       $(OBJDIR)/rtc.o \
        $(OBJDIR)/pmm.o \
        $(OBJDIR)/kheap.o \
+       $(OBJDIR)/klog.o \
+       $(OBJDIR)/panic.o \
+       $(OBJDIR)/settings.o \
+       $(OBJDIR)/vfs.o \
+       $(OBJDIR)/myfs.o \
        $(OBJDIR)/font.o \
        $(OBJDIR)/desktop.o
 
@@ -44,6 +53,18 @@ $(OBJDIR)/shell.o: $(SRCDIR)/shell.c
 	@mkdir -p $(OBJDIR)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
+$(OBJDIR)/klog.o: $(SRCDIR)/kernel/klog.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/panic.o: $(SRCDIR)/kernel/panic.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/settings.o: $(SRCDIR)/settings.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
 # ===== Apps =====
 
 $(OBJDIR)/clock.o: $(SRCDIR)/apps/clock.c
@@ -51,6 +72,14 @@ $(OBJDIR)/clock.o: $(SRCDIR)/apps/clock.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 $(OBJDIR)/calc.o: $(SRCDIR)/apps/calc.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/files_app.o: $(SRCDIR)/apps/files_app.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/textedit_app.o: $(SRCDIR)/apps/textedit_app.c
 	@mkdir -p $(OBJDIR)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
@@ -84,6 +113,14 @@ $(OBJDIR)/vga.o: $(SRCDIR)/drivers/vga.c
 	@mkdir -p $(OBJDIR)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
+$(OBJDIR)/ata.o: $(SRCDIR)/drivers/ata.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/rtc.o: $(SRCDIR)/drivers/rtc.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
 # ===== Memory Management =====
 
 $(OBJDIR)/pmm.o: $(SRCDIR)/mm/pmm.c
@@ -91,6 +128,16 @@ $(OBJDIR)/pmm.o: $(SRCDIR)/mm/pmm.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 $(OBJDIR)/kheap.o: $(SRCDIR)/mm/kheap.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+# ===== Filesystem =====
+
+$(OBJDIR)/vfs.o: $(SRCDIR)/fs/vfs.c
+	@mkdir -p $(OBJDIR)
+	$(CC) -c $< -o $@ $(CFLAGS)
+
+$(OBJDIR)/myfs.o: $(SRCDIR)/fs/myfs.c
 	@mkdir -p $(OBJDIR)
 	$(CC) -c $< -o $@ $(CFLAGS)
 
