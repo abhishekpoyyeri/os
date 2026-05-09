@@ -1,3 +1,7 @@
+
+<img width="641" height="400" alt="image" src="https://github.com/user-attachments/assets/a6ea8bec-b840-4767-829e-c693e49772f5" />
+
+
 # Detailed Guide: How to Run OS on Windows
 
 Since you are building an operating system, you cannot use your standard Windows compiler. You need a **Cross-Compiler** that targets "bare metal" hardware.
